@@ -2,6 +2,19 @@ import requests
 import json
 import time
 from openai import OpenAI
+from requests import session
+
+
+def login():
+    login_url = 'https://cprg.cqupt.edu.cn/train/api/student/auth'
+    login_data = {
+        'code': '2024212338',  # 替换为你的用户名
+        'pwd': '123456'  # 替换为你的密码
+    }
+    login_response = requests.post(login_url, json=login_data)
+    login_response.raise_for_status()  # 检查请求是否成功
+    sid = login_response.json().get('sid')
+    return sid
 def openaikey(question_content):
     client = OpenAI(
         base_url='https://xiaoai.plus/v1',
@@ -16,13 +29,7 @@ def openaikey(question_content):
         ]
     )
     return completion.choices[0].message.content
-# def get_response(url, data):
-#     response = requests.post(url, json=data)
-#     response_dict = json.loads(response.text)
-#     response_content = response_dict["response"]
-#     return response_content
 def post_answer(session_id, ans, global_id,sid):
-    # 构建数据格式
     data2 = {
         "sessionId": session_id,
         "answerPaper": {
@@ -40,7 +47,6 @@ def post_answer(session_id, ans, global_id,sid):
             "q5": []
         }
     }
-    # 发送请求
     url = f'https://cprg.cqupt.edu.cn/train/api/student/post-answer?sid={sid}'
     response = requests.post(url, json=data2)
     return response.status_code
@@ -52,12 +58,6 @@ def submit_answer(session_id,sid):
         return True
     else:
         print("提交失败:", response.status_code, response.text)
-# 登录信息
-login_url = 'https://cprg.cqupt.edu.cn/train/api/student/auth'
-login_data = {
-    'code': '2024212341',  # 替换为你的用户名
-    'pwd': '123456'  # 替换为你的密码
-}
 def get_score(session_id, sid):
     url=f'https://cprg.cqupt.edu.cn/train/api/student/score-result/{session_id}?sid={sid}'
     response = requests.get(url)
@@ -65,44 +65,32 @@ def get_score(session_id, sid):
         print(response.text)
     else:
         print("error to get score")
-# 发起登录请求
+def get_sessionid(sid):
+    choose_q_url = f'https://cprg.cqupt.edu.cn/train/api/student/choose-q?sid={sid}'
+    params = [{"qBaseType": 4, "number": 1, "level": 0, "tagId": 0}]  # 需要传递的参数
+    q_response = requests.post(choose_q_url, json=params)  # 使用POST方法并传递参数
+    q_response.raise_for_status()  # 检查请求是否成功
+    questions_data = q_response.json()
+    session_id = questions_data.get('sessionId')
+    return session_id
+def getquestions(session_id,sid):
+    record_url = f'https://cprg.cqupt.edu.cn/train/api/student/record/{session_id}?sid={sid}'
+    record_response = requests.get(record_url)
+    record_response.raise_for_status()
+    paper_data = record_response.json()
+    global_id = paper_data.get('answerPaper').get('q4')[0].get('globalId')
+    questions = paper_data.get('paper', {}).get('questions', [])
+    return questions, global_id
 def shuati(sid):
     try:
-        if(1):
-            choose_q_url = f'https://cprg.cqupt.edu.cn/train/api/student/choose-q?sid={sid}'
-            params = [{"qBaseType": 4, "number": 1, "level": 0, "tagId": 0}]  # 需要传递的参数
-
-            # 发起获取题目的请求
-            q_response = requests.post(choose_q_url, json=params)  # 使用POST方法并传递参数
-            q_response.raise_for_status()  # 检查请求是否成功
-
-            # 处理题目数据
-            questions_data = q_response.json()
-            session_id = questions_data.get('sessionId')
+            session_id = get_sessionid(sid)
             if session_id:
                 print(f"获取到 sessionId: {session_id}")
-
-                # 根据 sessionId 获取题目详细信息
-                record_url = f'https://cprg.cqupt.edu.cn/train/api/student/record/{session_id}?sid={sid}'
-                record_response = requests.get(record_url)
-                record_response.raise_for_status()  # 检查请求是否成功
-
-                # 处理题目详细信息
-
-                paper_data = record_response.json()
-                global_id = paper_data.get('answerPaper').get('q4')[0].get('globalId')
-                questions = paper_data.get('paper', {}).get('questions', [])
-
-                # 直接提取第一道题的内容
-                if questions:
-                    question_content = questions[0].get('content')  # 提取第一道题的内容
+                session_id = get_sessionid(sid)
+                if getquestions(session_id,sid):
+                    questions,global_id = getquestions(session_id,sid)
+                    question_content = questions[0].get('content')
                     print(f"题目内容: {question_content}")
-                    # data = {
-                    #     "model": "qwen14ba",
-                    #     "prompt": "注意！请根据以下内容提供只包含c语言程序的代码，绝对不要出现注释和解释，绝对严禁出现markdown语法，之要代码纯文本，且不要出现```c或```\n"+question_content,
-                    #     "stream": False
-                    # }
-                    # ans = get_response(url_generate, data)
                     ans = openaikey(question_content)
                     print(ans)
                     if (post_answer(session_id, ans, global_id, sid) == 200):
@@ -115,16 +103,10 @@ def shuati(sid):
                     print("未获取到题目。")
             else:
                 print("未获取到 sessionId。")
-        else:
-            print("未获取到 SID，登录失败。")
     except requests.exceptions.RequestException as e:
         print(f"请求失败: {e}")
-
-
-login_response = requests.post(login_url, json=login_data)
-login_response.raise_for_status()  # 检查请求是否成功
-sid = login_response.json().get('sid')
-if sid:
+if login():
+    sid=login()
     print(f"登录成功，SID: {sid}")
-    for i in range(0,20):
+    for i in range(0, 100):
         shuati(sid)
