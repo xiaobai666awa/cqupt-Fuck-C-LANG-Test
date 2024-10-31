@@ -8,7 +8,7 @@ from requests import session
 def login():
     login_url = 'https://cprg.cqupt.edu.cn/train/api/student/auth'
     login_data = {
-        'code': '2024212338',  # 替换为你的用户名
+        'code': 'XXXXXXX',  # 替换为你的用户名
         'pwd': '123456'  # 替换为你的密码
     }
     login_response = requests.post(login_url, json=login_data)
@@ -17,9 +17,10 @@ def login():
     return sid
 def openaikey(question_content):
     client = OpenAI(
-        base_url='https://xiaoai.plus/v1',
+        #替换为你的api地址(考虑到使用中转api所以加了这一条)
+        base_url='XXXX',
         # sk-xxx替换为自己的key
-        api_key='sk-4TJY1BgR3D53lXc1CdA9892708Cd41Bb80D1A7814014A321'
+        api_key='XXXXXXX'
     )
     completion = client.chat.completions.create(
         model="gpt-4o",
